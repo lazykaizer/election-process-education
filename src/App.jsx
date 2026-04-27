@@ -1,36 +1,13 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import React, { useState, Suspense, lazy } from 'react';
+import PropTypes from 'prop-types';
 import Quiz from './components/Quiz';
+import ErrorBoundary from './components/ErrorBoundary';
+import PdfCard from './components/PdfCard';
+import FloatingChat from './components/FloatingChat';
+import Dashboard from './components/Dashboard';
 
 // Lazy load Landing component
 const Landing = lazy(() => import('./Landing'));
-
-// Error Boundary Component
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error, errorInfo) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', textAlign: 'center', padding: '20px' }}>
-          <h2>Oops! Something went wrong.</h2>
-          <pre style={{ color: 'red', margin: '20px 0' }}>{this.state.error?.toString()}</pre>
-          <p>Please refresh the page to continue.</p>
-          <button onClick={() => window.location.reload()} style={{ padding: '10px 20px', background: '#FF6B00', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Refresh Now</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 // ── Translations ──
 const TRANSLATIONS = {
@@ -81,8 +58,6 @@ const TRANSLATIONS = {
     ocrDetails: 'निकाला गया विवरण'
   }
 };
-
-const PDF_BASE_URL = "https://github.com/lazykaizer/election-process-education/releases/download/v1.0";
 
 // ── PDF Card Data ──
 const PDF_CARDS = [
@@ -197,7 +172,7 @@ const PDF_CARDS = [
     file: 'FAQ_11_Election_Commission_of_India.pdf'
   },
   {
-    icon: '✈️',
+    icon: '🇮🇳',
     title: 'NRI Voter Registration — Form 6A',
     titleHi: 'NRI मतदाता पंजीकरण — फॉर्म 6A',
     subtitle: 'How overseas Indians can register and vote',
@@ -208,7 +183,12 @@ const PDF_CARDS = [
   }
 ];
 
-// Backend Chat API
+/**
+ * Fetches AI chat response from the backend.
+ * @param {string} input - User message
+ * @param {Array} history - Chat history
+ * @returns {Promise<string>} AI reply or error message
+ */
 async function getChatResponse(input, history) {
   try {
     const res = await fetch('/api/chat', {
@@ -224,8 +204,14 @@ async function getChatResponse(input, history) {
   }
 }
 
-// ── TTS Logic ──
 let currentAudio = null;
+/**
+ * Handles text-to-speech using Google Cloud TTS with fallback to browser SpeechSynthesis.
+ * @param {string} text - Text to speak
+ * @param {string} lang - Language code
+ * @param {Function} onEnd - Callback when speaking ends
+ * @returns {Promise<Object>} Controller object with a stop method
+ */
 async function speak(text, lang = 'en-IN', onEnd) {
   if (currentAudio) {
     currentAudio.pause();
@@ -250,7 +236,6 @@ async function speak(text, lang = 'en-IN', onEnd) {
     console.error('TTS API error:', err);
   }
 
-  // Fallback to browser TTS
   if (!window.speechSynthesis) return { stop: () => {} };
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang === 'hi' ? 'hi-IN' : 'en-IN';
@@ -260,354 +245,41 @@ async function speak(text, lang = 'en-IN', onEnd) {
   return { stop: () => window.speechSynthesis.cancel() };
 }
 
-// ── PDF Card Component ──
-function PdfCard({ card, index, lang }) {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const pdfPath = `${PDF_BASE_URL}/${card.file}`;
-  const t = TRANSLATIONS[lang];
-  const title = lang === 'hi' ? card.titleHi : card.title;
-  const subtitle = lang === 'hi' ? card.subtitleHi : card.subtitle;
-
-  const handleSpeak = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isSpeaking) {
-      if (window.currentSpeaker) window.currentSpeaker.stop();
-      setIsSpeaking(false);
-    } else {
-      setIsSpeaking(true);
-      window.currentSpeaker = await speak(`${title}. ${subtitle}`, lang, () => setIsSpeaking(false));
-    }
-  };
-
-  return (
-    <a
-      href={pdfPath}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="pdf-card"
-      style={{ animationDelay: `${(index + 1) * 0.08}s` }}
-    >
-      <div className="pdf-card-icon" role="img" aria-label="document icon">{card.icon}</div>
-      <span className="pdf-card-tag" style={{ background: `${card.tagColor}18`, color: card.tagColor }}>{card.tag}</span>
-      <h3 className="pdf-card-title">{title}</h3>
-      <p className="pdf-card-subtitle">{subtitle}</p>
-      <div className="pdf-card-footer">
-        <span className="pdf-card-link" onClick={() => {
-          if (window.gtag) {
-            window.gtag('event', 'pdf_opened', {
-              'event_category': 'resource',
-              'event_label': card.title
-            });
-          }
-        }}>{t.openGuide} <span className="pdf-card-arrow">→</span></span>
-        <button className={`tts-btn ${isSpeaking ? 'active' : ''}`} onClick={handleSpeak} aria-label="Listen to title">
-          {isSpeaking ? '⏹️' : '🔊'}
-        </button>
-      </div>
-    </a>
-  );
-}
-
-// ── Floating Chatbot Component ──
-function FloatingChat({ lang }) {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(false);
-  const scrollRef = useRef(null);
-  const tooltipTimer = useRef(null);
-  const tooltipAutoHide = useRef(null);
-  const t = TRANSLATIONS[lang];
-
-  const SUGGESTIONS = lang === 'hi' ? [
-    "मैं वोट देने के लिए पंजीकरण कैसे करूँ?",
-    "नोटा (NOTA) क्या है?",
-    "EVM कैसे काम करता है?",
-    "मेरा पोलिंग बूथ खोजें"
-  ] : [
-    "How do I register to vote?",
-    "What is NOTA?",
-    "How does EVM work?",
-    "Find my polling booth"
-  ];
-
-  useEffect(() => {
-    // Show tooltip after 4 seconds
-    tooltipTimer.current = setTimeout(() => {
-      setShowTooltip(true);
-      // Auto-hide after 6 seconds
-      tooltipAutoHide.current = setTimeout(() => {
-        setShowTooltip(false);
-      }, 6000);
-    }, 4000);
-
-    return () => {
-      clearTimeout(tooltipTimer.current);
-      clearTimeout(tooltipAutoHide.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, isTyping, open]);
-
-  function toggleChat() {
-    setOpen(prev => !prev);
-    setShowTooltip(false);
-    clearTimeout(tooltipAutoHide.current);
-  }
-
-  async function sendMessage(text) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    // --- Input Validation & Security ---
-    if (trimmed.length > 300) {
-      alert("Message too long! Please keep it under 300 characters.");
-      return;
-    }
-
-    const sanitized = trimmed
-      .replace(/<[^>]*>?/gm, '') 
-      .replace(/[<>]/g, '');      
-
-    const userMsg = { role: 'user', text: sanitized };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setIsTyping(true);
-
-    const aiText = await getChatResponse(sanitized, messages);
-
-    setIsTyping(false);
-    setMessages(prev => [...prev, { role: 'model', text: aiText }]);
-  }
-
-  function handleChipClick(text) {
-    sendMessage(text);
-  }
-
-  const showSuggestions = messages.length === 0 && !isTyping;
-
-  return (
-    <>
-      {/* Tooltip */}
-      {showTooltip && !open && (
-        <div className="chat-tooltip">
-          <span>👋 {lang === 'hi' ? 'अपना चुनाव प्रश्न यहाँ पूछें!' : 'Ask your election question here!'}</span>
-          <button className="chat-tooltip-close" onClick={(e) => { e.stopPropagation(); setShowTooltip(false); }}>✕</button>
-        </div>
-      )}
-
-      {/* Floating Button */}
-      <button className="fab-chat-btn" onClick={toggleChat} aria-label="Open AI chat">
-        <div className="fab-pulse-ring"></div>
-        <img
-          src="./favicon.svg"
-          alt=""
-          className="fab-icon-img"
-          onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling.style.display = 'block'; }}
-        />
-        <span className="fab-icon-fallback" style={{ display: 'none' }}>🤖</span>
-      </button>
-
-      {/* Chat Panel */}
-      <div className={`chat-panel ${open ? 'chat-panel-open' : 'chat-panel-closed'}`}>
-        {/* Header - Saffron */}
-        <div className="chat-panel-header">
-          <div className="chat-panel-header-left">
-            <div className="chat-panel-favicon-wrap">
-              <span className="chat-panel-flag-icon" role="img" aria-label="India Flag">🇮🇳</span>
-            </div>
-            <div>
-              <div className="chat-panel-name">{t.chatTitle}</div>
-              <div className="chat-panel-subtitle">{t.chatSubtitle}</div>
-            </div>
-          </div>
-          <button className="chat-panel-close" onClick={toggleChat} aria-label="Close chat">✕</button>
-        </div>
-
-
-        {/* Messages Area */}
-        <div className="chat-panel-body">
-          {showSuggestions && (
-            <div className="chat-panel-suggestions">
-              <p className="chat-panel-suggestions-title">{t.whatKnow}</p>
-              <div className="chat-panel-chips-grid">
-                {SUGGESTIONS.map((s, i) => (
-                  <button key={i} className="chat-panel-chip" onClick={() => handleChipClick(s)}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} className={`chat-panel-msg chat-panel-msg-${m.role}`}>
-              {m.role === 'ai' && (
-                <img src="./favicon.svg" alt="" className="chat-panel-msg-icon" onError={(e) => { e.target.style.display = 'none'; }} />
-              )}
-              <div className={`chat-panel-bubble chat-panel-bubble-${m.role}`}>
-                {m.text.split('\n').map((line, j) => (
-                  <React.Fragment key={j}>{line}<br /></React.Fragment>
-                ))}
-              </div>
-            </div>
-          ))}
-          {isTyping && (
-            <div className="chat-panel-msg chat-panel-msg-ai">
-              <img src="./favicon.svg" alt="" className="chat-panel-msg-icon" onError={(e) => { e.target.style.display = 'none'; }} />
-              <div className="chat-panel-typing">
-                <div className="chat-panel-dot"></div>
-                <div className="chat-panel-dot"></div>
-                <div className="chat-panel-dot"></div>
-              </div>
-            </div>
-          )}
-          <div ref={scrollRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="chat-panel-input-area">
-          <div className="chat-panel-input-wrap">
-            <input
-              className="chat-panel-input"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && sendMessage(input)}
-              placeholder={t.chatPlaceholder}
-            />
-            <button
-              className="chat-panel-send"
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim()}
-              aria-label="Send message"
-            >→</button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Dashboard Component ──
-function Dashboard({ onHome, lang, setLang }) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const pdfGridRef = useRef(null);
-  const t = TRANSLATIONS[lang];
-
-  const filteredCards = PDF_CARDS.filter(card => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    const title = lang === 'hi' ? card.titleHi : card.title;
-    const subtitle = lang === 'hi' ? card.subtitleHi : card.subtitle;
-    return title.toLowerCase().includes(q) || subtitle.toLowerCase().includes(q);
-  });
-
-
-  return (
-    <div className="dashboard-wrap">
-      {/* ── Main Content (Full Width) ── */}
-      <main className="db-main">
-        {/* Header */}
-        <header className="db-header">
-          <div className="db-header-title">
-            <span role="img" aria-label="ballot box">🗳️</span> Naagrik AI
-          </div>
-          <div className="db-header-actions">
-            <div className="lang-switcher">
-              <button className={`lang-btn ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>EN</button>
-              <button className={`lang-btn ${lang === 'hi' ? 'active' : ''}`} onClick={() => setLang('hi')}>हिन्दी</button>
-            </div>
-            <button className="db-action-btn" onClick={onHome}>
-              {t.home}
-            </button>
-          </div>
-        </header>
-
-        {/* PDF Resource Grid */}
-        <div className="pdf-section" ref={pdfGridRef}>
-          <div className="pdf-section-header">
-            <h1 className="pdf-section-title">{t.title} <span role="img" aria-label="ballot box">🗳️</span></h1>
-            <p className="pdf-section-subtitle">{t.subtitle}</p>
-            <div className="pdf-search-wrap">
-              <span className="pdf-search-icon">🔍</span>
-              <input
-                className="pdf-search"
-                type="text"
-                placeholder={t.search}
-                value={searchQuery}
-                onChange={e => {
-                  setSearchQuery(e.target.value);
-                  if (window.gtag && e.target.value.length > 3) {
-                    window.gtag('event', 'search', {
-                      'search_term': e.target.value
-                    });
-                  }
-                }}
-              />
-              {searchQuery && (
-                <button className="pdf-search-clear" onClick={() => setSearchQuery('')}>✕</button>
-              )}
-            </div>
-          </div>
-
-          <div className="pdf-grid">
-            {filteredCards.map((card, i) => (
-              <PdfCard key={i} card={card} index={i} lang={lang} />
-            ))}
-          </div>
-
-          {!searchQuery && (
-            <>
-              <div className="section-divider">
-                <span>Quiz Zone</span>
-              </div>
-              <Quiz lang={lang} />
-            </>
-          )}
-
-
-          {/* No match message */}
-          {searchQuery && filteredCards.length === 0 && (
-            <div className="pdf-no-match">
-              {lang === 'hi' ? `कोई गाइड नहीं मिली '${searchQuery}'` : `No guides found for '${searchQuery}'`}
-            </div>
-          )}
-
-          {/* More Coming Soon */}
-          <div className="pdf-coming-soon">
-            <span className="pdf-coming-soon-emoji" role="img" aria-label="hourglass">⏳</span>
-            <h3>{t.comingSoon}</h3>
-            <p>{t.comingSoonDesc}</p>
-            <span className="pdf-coming-soon-tag">{t.updated}</span>
-          </div>
-        </div>
-      </main>
-
-      {/* Floating Chatbot */}
-      <FloatingChat lang={lang} />
-    </div>
-  );
-}
-
-// ── App Root ──
+/**
+ * Main App component that manages navigation between Landing and Dashboard.
+ */
 export default function App() {
   const [view, setView] = useState('landing');
   const [lang, setLang] = useState('en');
 
+  const handleLaunch = () => {
+    setView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleHome = () => {
+    setView('landing');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <ErrorBoundary>
-      <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0f', color: 'white' }}>Loading Naagrik AI...</div>}>
-        {view === 'landing' ? (
-          <Landing onLaunch={() => setView('dashboard')} />
-        ) : (
-          <Dashboard onHome={() => setView('landing')} lang={lang} setLang={setLang} />
-        )}
-      </Suspense>
+      {view === 'landing' ? (
+        <Suspense fallback={<div className="loading">Loading Naagrik AI...</div>}>
+          <Landing onLaunch={handleLaunch} />
+        </Suspense>
+      ) : (
+        <Dashboard 
+          onHome={handleHome}
+          lang={lang}
+          setLang={setLang}
+          pdfCards={PDF_CARDS}
+          translations={TRANSLATIONS}
+          speakFn={speak}
+          FloatingChat={FloatingChat}
+          getChatResponse={getChatResponse}
+        />
+      )}
     </ErrorBoundary>
   );
 }

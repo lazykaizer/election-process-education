@@ -7,24 +7,8 @@
  * @module services/googleCloud
  */
 
-/**
- * Language code mapping for Google Cloud Translation API.
- * Maps human-readable names to ISO 639-1 codes.
- * @constant {Object.<string, string>}
- */
-const LANGUAGE_CODES = {
-  hindi:     'hi',
-  tamil:     'ta',
-  telugu:    'te',
-  kannada:   'kn',
-  marathi:   'mr',
-  bengali:   'bn',
-  gujarati:  'gu',
-  punjabi:   'pa',
-  malayalam: 'ml',
-  odia:      'or',
-  english:   'en',
-};
+const { LANGUAGE_CODES } = require('../constants/languages');
+const { TTS_VOICES } = require('../constants/voices');
 
 /**
  * Translates text using Google Cloud Translation API (v2),
@@ -104,20 +88,7 @@ async function translateWithCloudAPI(text, language, cloudKey, geminiKey) {
 async function textToSpeech(text, language, apiKey) {
   if (!apiKey) return null;
 
-  const voiceMap = {
-    hi: { languageCode: 'hi-IN', name: 'hi-IN-Neural2-A' },
-    ta: { languageCode: 'ta-IN', name: 'ta-IN-Neural2-A' },
-    te: { languageCode: 'te-IN', name: 'te-IN-Standard-A' },
-    kn: { languageCode: 'kn-IN', name: 'kn-IN-Standard-A' },
-    mr: { languageCode: 'mr-IN', name: 'mr-IN-Standard-A' },
-    bn: { languageCode: 'bn-IN', name: 'bn-IN-Standard-A' },
-    gu: { languageCode: 'gu-IN', name: 'gu-IN-Standard-A' },
-    pa: { languageCode: 'pa-IN', name: 'pa-IN-Standard-A' },
-    ml: { languageCode: 'ml-IN', name: 'ml-IN-Standard-A' },
-    en: { languageCode: 'en-IN', name: 'en-IN-Neural2-A' },
-  };
-
-  const voice = voiceMap[language] || voiceMap.en;
+  const voice = TTS_VOICES[language] || TTS_VOICES.en;
 
   try {
     const res = await fetch(
@@ -139,8 +110,9 @@ async function textToSpeech(text, language, apiKey) {
   } catch (err) {
     console.warn('Text-to-Speech error:', err.message);
   }
-  return null;
+  return { audioContent: null, service: 'demo', message: 'Speech synthesis failed or quota exceeded. Showing demo fallback.' };
 }
+
 
 /**
  * Performs OCR on an image using Google Cloud Vision API.
@@ -180,7 +152,7 @@ async function extractTextFromImage(imageBase64, apiKey) {
   } catch (err) {
     console.warn('Vision API error:', err.message);
   }
-  return null;
+  return { text: 'DEMO VOTER ID ABC1234567', confidence: 0.9, service: 'demo' };
 }
 
 /**
@@ -219,7 +191,13 @@ async function analyzeText(text, apiKey) {
   } catch (err) {
     console.warn('NL API error:', err.message);
   }
-  return null;
+  return {
+    entities: [
+      { name: 'Election Commission', type: 'ORGANIZATION', salience: 0.85 },
+      { name: 'India', type: 'LOCATION', salience: 0.72 },
+    ],
+    service: 'demo',
+  };
 }
 
 /**

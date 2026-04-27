@@ -27,11 +27,13 @@ const helmet   = require('helmet');
 const compress = require('compression');
 const path     = require('path');
 
-const { validateEnvironment, requestLogger } = require('./middleware/index');
+const { validateEnvironment } = require('./config/env');
+const { requestLogger, validateChatInput } = require('./middleware/index');
+const { apiLimiter, chatLimiter } = require('./middleware/rateLimiters');
 const configRouter   = require('./routes/config');
 const electionRouter = require('./routes/election');
 const aiRouter       = require('./routes/ai');
-const { ELECTION_DATA } = require('./data/electionData');
+const { ELECTION_DATA } = require('./constants/electionData');
 
 validateEnvironment();
 
@@ -59,12 +61,17 @@ app.use(helmet({
                    'https://www.google-analytics.com'],
       imgSrc:     ["'self'", 'data:', 'https:'],
     },
+    // Nonce support can be added here by generating a unique string per request
+    // and passing it to the template engine or setting it in res.locals
   },
 }));
 
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*', methods: ['GET', 'POST'] }));
 app.use(express.json({ limit: '10mb' }));
 app.use(requestLogger);
+app.use('/api', apiLimiter);
+app.use('/api/chat', chatLimiter);
+app.use('/api', validateChatInput);
 
 // ── API Routes ────────────────────────────────────────────────────────────────
 

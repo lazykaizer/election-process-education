@@ -7,100 +7,52 @@
  */
 
 const express = require('express');
-const { LANGUAGE_CODES, translateWithCloudAPI, textToSpeech, extractTextFromImage, analyzeText, exportToBigQuery } = require('../services/googleCloud');
-const { buildSystemPrompt } = require('../services/gemini');
+const { translateWithCloudAPI, textToSpeech, extractTextFromImage, analyzeText, exportToBigQuery } = require('../services/googleCloud');
 const { apiLimiter, chatLimiter } = require('../middleware/rateLimiters');
-const { validateString } = require('../middleware/index');
-const { ELECTION_DATA } = require('../data/electionData');
+const { validateString } = require('../utils/validationUtils');
+const { LANGUAGE_CODES, SUPPORTED_LANGUAGES } = require('../constants/languages');
+const { getGroundedResponse, validateChatHistory, callGeminiAPI } = require('../utils/aiHelpers');
 
 const router = express.Router();
 
-const SUPPORTED_LANGUAGES = ['hindi', 'tamil', 'telugu', 'kannada', 'marathi', 'bengali', 'gujarati', 'punjabi', 'malayalam', 'odia'];
-
 /**
- * Provides instant grounded responses for common keywords to bypass API quota/latency.
+ * @route POST /api/chat
+ * @desc Gemini-powered election AI chat with grounding and history support.
  */
-function getGroundedResponse(msg) {
-  const query = msg.toLowerCase();
-  if (query.includes('register') || query.includes('form 6')) return "🗳️ **How to Register to Vote:**\n\n1. Visit **voters.eci.gov.in**.\n2. Fill **Form 6** for new registration.\n3. Verification by BLO.\n\nHelpline: **1950**.";
-  if (query.includes('evm')) return "📟 **EVM:** Standalone devices for casting votes since 1982. 100% tamper-proof.";
-  if (query.includes('vvpat')) return "🧾 **VVPAT:** Prints a slip for 7 seconds to verify your vote.";
-  if (query.includes('nota')) return "🔘 **NOTA:** Option to reject all candidates officially.";
-  if (query.includes('id') || query.includes('epic')) return "🪪 **Documents:** Voter ID (EPIC), Aadhaar, PAN, Passport, etc.";
-  if (query.includes('lok sabha')) return "🏛️ **Lok Sabha:** 543 seats, 5-year term. Next: 2029.";
-  return null;
-}
-
-/** @route POST /api/chat — Gemini-powered election AI chat */
 router.post('/chat', chatLimiter, async (req, res) => {
   const { message, history = [] } = req.body;
 
   const msgCheck = validateString(message, 'message', 1000);
   if (!msgCheck.valid) return res.status(400).json({ error: msgCheck.error });
 
-  // 1. Check for Grounded (Instant) Response first
   const groundedResponse = getGroundedResponse(message);
   if (groundedResponse) return res.json({ reply: groundedResponse });
 
-  if (!Array.isArray(history)) {
-    return res.status(400).json({ error: 'history must be an array.' });
-  }
-
-  const VALID_ROLES = new Set(['user', 'model']);
-  const historyValid = history.every(
-    h => h && typeof h.role === 'string' && VALID_ROLES.has(h.role) && typeof h.text === 'string'
-  );
-  if (!historyValid) {
-    return res.status(400).json({ error: 'history items must have role (user|model) and text fields.' });
-  }
+  const historyCheck = validateChatHistory(history);
+  if (!historyCheck.valid) return res.status(400).json({ error: historyCheck.error });
 
   const apiKey = process.env.GEMINI_API_KEY;
-
   if (!apiKey) {
     return res.json({
-      reply: "👋 Namaste! I'm **Naagrik AI**, your Indian elections guide.\n\nI'm running in demo mode. Once configured with Gemini API, I can answer:\n• How do I register to vote?\n• What is NOTA?\n• How does the EVM work?\n• When are the next elections?\n\nContact: Voter Helpline **1950**",
+      reply: "👋 Namaste! I'm **Naagrik AI**, your Indian elections guide.\n\nI'm running in demo mode. Once configured with Gemini API, I can answer complex queries. Try these basic ones:\n• How do I register to vote?\n• What is NOTA?\n• How does the EVM work?\n\nContact: Voter Helpline **1950**",
       demo: true,
     });
   }
 
   try {
-    console.log(`[Chat] Using Gemini Flash Lite with key: ${apiKey.substring(0, 8)}...`);
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`,
-      {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: message.trim() }] }
-          ],
-          system_instruction: {
-            parts: [{ text: buildSystemPrompt() }]
-          },
-          generationConfig: { maxOutputTokens: 1024, temperature: 0.7, topP: 0.9 },
-        }),
-      }
-    );
-
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.json().catch(() => ({}));
-      console.error('Gemini error:', geminiRes.status, errBody);
-      return res.status(502).json({ error: 'AI service temporarily unavailable. Please try again.' });
-    }
-
-    const data  = await geminiRes.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!reply) return res.status(502).json({ error: 'Empty response from AI. Please try again.' });
-
+    const reply = await callGeminiAPI(apiKey, message, history);
     res.json({ reply });
   } catch (err) {
-    console.error('Chat error:', err);
-    res.status(500).json({ error: 'Internal server error.' });
+    console.error('Chat error:', err.message);
+    res.status(502).json({ error: err.message || 'Internal server error.' });
   }
 });
 
-/** @route POST /api/translate — Cloud Translation API */
+
+/**
+ * @route POST /api/translate
+ * @desc Translates text to a supported Indian language using Cloud Translation API or Gemini.
+ */
 router.post('/translate', apiLimiter, async (req, res) => {
   const { text, language } = req.body;
 
@@ -131,7 +83,10 @@ router.post('/translate', apiLimiter, async (req, res) => {
   }
 });
 
-/** @route POST /api/text-to-speech — Cloud TTS API */
+/**
+ * @route POST /api/text-to-speech
+ * @desc Converts text to speech audio using Google Cloud TTS.
+ */
 router.post('/text-to-speech', apiLimiter, async (req, res) => {
   const { text, language = 'en' } = req.body;
 
@@ -168,7 +123,10 @@ router.post('/text-to-speech', apiLimiter, async (req, res) => {
   }
 });
 
-/** @route POST /api/vision/verify-voter-id — Cloud Vision OCR */
+/**
+ * @route POST /api/vision/verify-voter-id
+ * @desc Verifies a Voter ID card image using Cloud Vision OCR.
+ */
 router.post('/vision/verify-voter-id', apiLimiter, async (req, res) => {
   const { image } = req.body;
 
@@ -226,7 +184,10 @@ router.post('/vision/verify-voter-id', apiLimiter, async (req, res) => {
   }
 });
 
-/** @route POST /api/analyze — Cloud Natural Language API */
+/**
+ * @route POST /api/analyze
+ * @desc Analyzes text sentiment and entities using Cloud Natural Language API.
+ */
 router.post('/analyze', apiLimiter, async (req, res) => {
   const { text } = req.body;
 
@@ -259,7 +220,10 @@ router.post('/analyze', apiLimiter, async (req, res) => {
   }
 });
 
-/** @route POST /api/analytics/export — BigQuery export */
+/**
+ * @route POST /api/analytics/export
+ * @desc Exports user engagement events to BigQuery.
+ */
 router.post('/analytics/export', apiLimiter, async (req, res) => {
   const { eventType, eventData, sessionId } = req.body;
   const VALID_EVENTS = ['quiz_complete', 'chat_message', 'page_view', 'translation', 'tts_request', 'voter_id_scan'];

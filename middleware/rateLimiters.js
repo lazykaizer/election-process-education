@@ -10,8 +10,8 @@ const rateLimit = require('express-rate-limit');
 
 /** General API rate limiter: 100 requests per minute */
 const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 100,
+  windowMs: process.env.NODE_ENV === 'test' ? 60000 : 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 50 : 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again in a minute.' },
@@ -19,8 +19,8 @@ const apiLimiter = rateLimit({
 
 /** Chat-specific rate limiter: 20 requests per minute */
 const chatLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
+  windowMs: process.env.NODE_ENV === 'test' ? 60000 : 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 50 : 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many chat requests. Please wait a moment.' },

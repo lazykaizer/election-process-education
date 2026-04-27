@@ -7,13 +7,16 @@
  */
 
 const express = require('express');
-const { ELECTION_DATA } = require('../data/electionData');
+const { ELECTION_DATA } = require('../constants/electionData');
 const cache = require('../services/cache');
 const { apiLimiter } = require('../middleware/rateLimiters');
 
 const router = express.Router();
 
-/** @route GET /api/election — All election data summary */
+/**
+ * @route GET /api/election
+ * @desc Retrieves a summary of all election data (facts, types, terms, resources).
+ */
 router.get('/election', apiLimiter, (req, res) => {
   const cached = cache.get('election');
   if (cached) {
@@ -32,17 +35,26 @@ router.get('/election', apiLimiter, (req, res) => {
   res.json(data);
 });
 
-/** @route GET /api/steps — Voting steps */
+/**
+ * @route GET /api/steps
+ * @desc Retrieves step-by-step voting process guides.
+ */
 router.get('/steps', apiLimiter, (req, res) => {
   res.json({ steps: ELECTION_DATA.votingSteps });
 });
 
-/** @route GET /api/quiz — Quiz questions */
+/**
+ * @route GET /api/quiz
+ * @desc Retrieves educational quiz questions.
+ */
 router.get('/quiz', apiLimiter, (req, res) => {
   res.json({ questions: ELECTION_DATA.quizQuestions, total: ELECTION_DATA.quizQuestions.length });
 });
 
-/** @route POST /api/quiz/submit — Submit quiz answers */
+/**
+ * @route POST /api/quiz/submit
+ * @desc Evaluates quiz answers and returns score/feedback.
+ */
 router.post('/quiz/submit', apiLimiter, (req, res) => {
   const { answers, sessionId } = req.body;
 
@@ -75,7 +87,10 @@ router.post('/quiz/submit', apiLimiter, (req, res) => {
   });
 });
 
-/** @route GET /api/parliament — Parliament info */
+/**
+ * @route GET /api/parliament
+ * @desc Retrieves information about Lok Sabha and Rajya Sabha.
+ */
 router.get('/parliament', apiLimiter, (req, res) => {
   res.json({
     lokSabha:  ELECTION_DATA.parliament.lokSabha,
@@ -83,7 +98,10 @@ router.get('/parliament', apiLimiter, (req, res) => {
   });
 });
 
-/** @route GET /api/president — President & VP info */
+/**
+ * @route GET /api/president
+ * @desc Retrieves information about the President and Vice President.
+ */
 router.get('/president', apiLimiter, (req, res) => {
   res.json({
     president:     ELECTION_DATA.president,
@@ -91,29 +109,44 @@ router.get('/president', apiLimiter, (req, res) => {
   });
 });
 
-/** @route GET /api/states — States data */
+/**
+ * @route GET /api/states
+ * @desc Retrieves list of states sorted by Lok Sabha seat counts.
+ */
 router.get('/states', apiLimiter, (req, res) => {
   res.json({ states: ELECTION_DATA.topStatesBySeats });
 });
 
-/** @route GET /api/dates — Upcoming election dates */
+/**
+ * @route GET /api/dates
+ * @desc Retrieves upcoming election dates and schedule.
+ */
 router.get('/dates', apiLimiter, (req, res) => {
   res.json({ dates: ELECTION_DATA.upcomingDates });
 });
 
-/** @route GET /api/announcements — Latest ECI announcements */
+/**
+ * @route GET /api/announcements
+ * @desc Retrieves latest official announcements from ECI.
+ */
 router.get('/announcements', apiLimiter, (req, res) => {
   res.json({ announcements: ELECTION_DATA.announcements });
 });
 
-/** @route GET /api/leaderboard — Quiz leaderboard (in-memory) */
+/**
+ * @route GET /api/leaderboard
+ * @desc Retrieves the top scores from the educational quiz.
+ */
 const leaderboard = [];
 router.get('/leaderboard', apiLimiter, (req, res) => {
   const top10 = [...leaderboard].sort((a, b) => b.score - a.score).slice(0, 10);
   res.json({ leaderboard: top10 });
 });
 
-/** @route POST /api/leaderboard — Submit score to leaderboard */
+/**
+ * @route POST /api/leaderboard
+ * @desc Submits a new score to the leaderboard.
+ */
 router.post('/leaderboard', apiLimiter, (req, res) => {
   const { name, score, total, sessionId } = req.body;
   if (typeof score !== 'number' || typeof total !== 'number') {

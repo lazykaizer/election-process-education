@@ -226,4 +226,22 @@ describe('Naagrik AI - API Integration Tests', () => {
       expect(res.statusCode).toBe(400);
     });
   });
+
+  describe('Additional Security & Health Tests', () => {
+    it('GET /api/health should return status 200', async () => {
+      const res = await request(app).get('/api/health');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.status).toBe('ok');
+    });
+
+    it('should return 429 after 50 requests (test mode limit)', async () => {
+      // In test mode, limit is 50. 
+      // We send 50 requests sequentially to avoid open handles and ensure they all count.
+      for (let i = 0; i < 50; i++) {
+        await request(app).get('/api/health');
+      }
+      const res = await request(app).get('/api/health');
+      expect(res.statusCode).toBe(429);
+    });
+  });
 });

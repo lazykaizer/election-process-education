@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PropTypes from 'prop-types';
 
 const QUIZ_DATA = [
   {
@@ -160,3 +161,7 @@ export default function Quiz({ lang }) {
     </motion.div>
   );
 }
+
+Quiz.propTypes = {
+  lang: PropTypes.string,
+};

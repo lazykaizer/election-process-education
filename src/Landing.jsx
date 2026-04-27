@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import PropTypes from 'prop-types';
 
 const DEMO_MESSAGES = [
   { role: 'user', text: 'What happens if I miss voting?' },
@@ -328,6 +329,10 @@ const Landing = ({ onLaunch }) => {
       </footer>
     </div>
   );
+};
+
+Landing.propTypes = {
+  onLaunch: PropTypes.func.isRequired,
 };
 
 export default Landing;

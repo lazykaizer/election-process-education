@@ -18,6 +18,8 @@ router.get('/health', (req, res) => {
   });
 });
 
+const { SUPPORTED_LANGUAGES } = require('../constants/languages');
+
 /** @route GET /api/config — Public configuration (no secrets) */
 router.get('/config', (req, res) => {
   res.json({
@@ -31,7 +33,7 @@ router.get('/config', (req, res) => {
       cloudNLP:         !!process.env.GOOGLE_CLOUD_API_KEY,
       bigQuery:         !!process.env.GOOGLE_CLOUD_PROJECT_ID,
     },
-    supportedLanguages: ['hindi', 'tamil', 'telugu', 'kannada', 'marathi', 'bengali', 'gujarati', 'punjabi', 'malayalam', 'odia'],
+    supportedLanguages: SUPPORTED_LANGUAGES,
   });
 });
 
