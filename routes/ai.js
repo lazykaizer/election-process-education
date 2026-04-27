@@ -11,10 +11,25 @@ const { LANGUAGE_CODES, translateWithCloudAPI, textToSpeech, extractTextFromImag
 const { buildSystemPrompt } = require('../services/gemini');
 const { apiLimiter, chatLimiter } = require('../middleware/rateLimiters');
 const { validateString } = require('../middleware/index');
+const { ELECTION_DATA } = require('../data/electionData');
 
 const router = express.Router();
 
 const SUPPORTED_LANGUAGES = ['hindi', 'tamil', 'telugu', 'kannada', 'marathi', 'bengali', 'gujarati', 'punjabi', 'malayalam', 'odia'];
+
+/**
+ * Provides instant grounded responses for common keywords to bypass API quota/latency.
+ */
+function getGroundedResponse(msg) {
+  const query = msg.toLowerCase();
+  if (query.includes('register') || query.includes('form 6')) return "🗳️ **How to Register to Vote:**\n\n1. Visit **voters.eci.gov.in**.\n2. Fill **Form 6** for new registration.\n3. Verification by BLO.\n\nHelpline: **1950**.";
+  if (query.includes('evm')) return "📟 **EVM:** Standalone devices for casting votes since 1982. 100% tamper-proof.";
+  if (query.includes('vvpat')) return "🧾 **VVPAT:** Prints a slip for 7 seconds to verify your vote.";
+  if (query.includes('nota')) return "🔘 **NOTA:** Option to reject all candidates officially.";
+  if (query.includes('id') || query.includes('epic')) return "🪪 **Documents:** Voter ID (EPIC), Aadhaar, PAN, Passport, etc.";
+  if (query.includes('lok sabha')) return "🏛️ **Lok Sabha:** 543 seats, 5-year term. Next: 2029.";
+  return null;
+}
 
 /** @route POST /api/chat — Gemini-powered election AI chat */
 router.post('/chat', chatLimiter, async (req, res) => {
@@ -22,6 +37,10 @@ router.post('/chat', chatLimiter, async (req, res) => {
 
   const msgCheck = validateString(message, 'message', 1000);
   if (!msgCheck.valid) return res.status(400).json({ error: msgCheck.error });
+
+  // 1. Check for Grounded (Instant) Response first
+  const groundedResponse = getGroundedResponse(message);
+  if (groundedResponse) return res.json({ reply: groundedResponse });
 
   if (!Array.isArray(history)) {
     return res.status(400).json({ error: 'history must be an array.' });
@@ -45,25 +64,20 @@ router.post('/chat', chatLimiter, async (req, res) => {
   }
 
   try {
-    const contents = [
-      ...history.slice(-10).map(h => ({ role: h.role, parts: [{ text: h.text }] })),
-      { role: 'user', parts: [{ text: message.trim() }] },
-    ];
-
+    console.log(`[Chat] Using Gemini Flash Lite with key: ${apiKey.substring(0, 8)}...`);
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          system_instruction: { parts: [{ text: buildSystemPrompt() }] },
-          contents,
-          generationConfig: { maxOutputTokens: 512, temperature: 0.4, topP: 0.9 },
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT',     threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH',    threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          contents: [
+            { role: 'user', parts: [{ text: message.trim() }] }
           ],
+          system_instruction: {
+            parts: [{ text: buildSystemPrompt() }]
+          },
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.7, topP: 0.9 },
         }),
       }
     );

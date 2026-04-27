@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import Quiz from './components/Quiz';
-import AIAnalyzer from './components/AIAnalyzer';
-import TranslatorTool from './components/TranslatorTool';
 
 // Lazy load Landing component
 const Landing = lazy(() => import('./Landing'));
@@ -495,108 +493,6 @@ function FloatingChat({ lang }) {
   );
 }
 
-// ── Voter ID Verify Component ──
-function VoterIDVerify({ lang }) {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const t = TRANSLATIONS[lang];
-  const fileInputRef = useRef(null);
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (file.size > 5_000_000) {
-      setError("Image must be less than 5MB");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64Img = event.target.result;
-      setLoading(true);
-      setError(null);
-      setResult(null);
-      
-      try {
-        const res = await fetch('/api/vision/verify-voter-id', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64Img })
-        });
-        const data = await res.json();
-        
-        if (res.ok) {
-          setResult(data);
-        } else {
-          setError(data.error || 'Verification failed.');
-        }
-      } catch (err) {
-        console.error('OCR Error:', err);
-        setError('Network error during verification.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <div className="voter-verify-section">
-      <div className="section-divider">
-        <span>AI Vision Verification</span>
-      </div>
-      <h2 className="voter-verify-title">{t.verifyTitle} <span role="img" aria-label="camera">📷</span></h2>
-      <p className="voter-verify-subtitle">{t.verifySubtitle}</p>
-      
-      <div className="voter-verify-card">
-        <div className="voter-verify-upload" onClick={() => fileInputRef.current?.click()}>
-          <input 
-            type="file" 
-            accept="image/*" 
-            ref={fileInputRef} 
-            onChange={handleImageUpload} 
-            style={{ display: 'none' }} 
-          />
-          {loading ? (
-            <div className="voter-verify-loading">
-              <Loader2 className="spinner" size={24} /> {t.extracting}
-            </div>
-          ) : (
-            <div className="voter-verify-placeholder">
-              <span className="upload-icon">⬆️</span>
-              <span>{t.uploadEpic}</span>
-            </div>
-          )}
-        </div>
-
-        {error && <div className="voter-verify-error">{error}</div>}
-
-        {result && (
-          <div className={`voter-verify-result ${result.isValidVoterID ? 'valid' : 'invalid'}`}>
-            <h3>
-              {result.isValidVoterID ? '✅ ' + t.verifySuccess : '❌ ' + t.verifyFail}
-            </h3>
-            {result.extracted && (
-              <div className="voter-verify-details">
-                <h4>{t.ocrDetails}</h4>
-                <p><strong>EPIC:</strong> {result.extracted.epicNumber || 'Not found'}</p>
-                <div className="voter-verify-raw">
-                   {result.extracted.rawText?.split('\n').map((l, i) => <div key={i}>{l}</div>)}
-                </div>
-              </div>
-            )}
-            {result.service === 'demo' && (
-              <p className="voter-verify-demo-note">Note: This is a demo response. Add API Key for real OCR.</p>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Dashboard Component ──
 function Dashboard({ onHome, lang, setLang }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -667,14 +563,6 @@ function Dashboard({ onHome, lang, setLang }) {
 
           {!searchQuery && (
             <>
-              <VoterIDVerify lang={lang} />
-              
-              <div className="section-divider">
-                <span>AI NLP Tools</span>
-              </div>
-              <AIAnalyzer />
-              <TranslatorTool />
-              
               <div className="section-divider">
                 <span>Quiz Zone</span>
               </div>

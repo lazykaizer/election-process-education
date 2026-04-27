@@ -1,20 +1,20 @@
-# Build stage — compile React/Vite frontend
-FROM node:18-alpine AS build
+# Use Node 20 for better stability
+FROM node:20-slim AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --include=dev
+# Use install instead of ci to handle minor dependency shifts
+RUN npm install
 COPY . .
 RUN npm run build
 
-# Production stage — Express backend serves built frontend
-FROM node:18-alpine
+FROM node:20-slim
 WORKDIR /app
 
-# Security: run as non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S naagrik -u 1001
+# Install wget for healthcheck
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy backend files
 COPY server.js ./
@@ -23,14 +23,15 @@ COPY services/ ./services/
 COPY middleware/ ./middleware/
 COPY routes/ ./routes/
 
-# Copy built frontend
+# Copy built frontend from build stage
 COPY --from=build /app/dist ./dist
-
-USER naagrik
 
 ENV PORT=8080
 ENV NODE_ENV=production
 EXPOSE 8080
+
+# Non-root user for security
+USER node
 
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD wget -qO- http://localhost:8080/api/health || exit 1

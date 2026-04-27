@@ -36,6 +36,7 @@ Naagrik AI heavily leverages the Google Cloud ecosystem to deliver a production-
 - 🔊 **TTS Accessibility**: "Listen to Guide" feature using Cloud TTS for inclusive education.
 - 🤖 **Gemini AI Chat**: Context-aware bot powered by Gemini 2.0 Flash, deeply grounded in Indian election laws.
 - 📄 **Voter ID OCR**: Verify EPIC details instantly using Vision API.
+- ⚡ **Hybrid AI Architecture**: Instant local responses for common election FAQs (EVM, NOTA, Registration) combined with Gemini 2.0 Flash for complex queries, ensuring 0ms latency for key info.
 - 🏆 **Gamified Learning**: Interactive **Quiz Zone** to test and reward electoral knowledge, backed by BigQuery analytics.
 - 📱 **Premium UI/UX**: Elite glassmorphism design with a vibrant Indian aesthetic (Saffron, White, Green).
 - 🛡️ **Enterprise Security**: Helmet, CORS, Rate Limiting, and XSS sanitization built into the Express middleware.
