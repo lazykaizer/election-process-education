@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 
 const DEMO_MESSAGES = [
   { role: 'user', text: 'What happens if I miss voting?' },
@@ -15,6 +16,22 @@ const Landing = ({ onLaunch }) => {
   const [resourceVisible, setResourceVisible] = useState(false);
   const currentIdx = useRef(0);
   const resourceRef = useRef(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+
+  const handleFeedback = (type) => {
+    // Trigger Google Analytics Event
+    if (window.gtag) {
+      window.gtag('event', 'feedback_submitted', {
+        'feedback_type': type
+      });
+    }
+    setFeedbackSent(true);
+    setTimeout(() => {
+      setFeedbackSent(false);
+      setShowFeedback(false);
+    }, 3000);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -83,7 +100,7 @@ const Landing = ({ onLaunch }) => {
         </div>
         
         {/* Ashoka Chakra SVG */}
-        <svg className="ashoka-chakra" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <svg className="ashoka-chakra" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ashoka Chakra - Symbol of Indian Democracy">
           <circle cx="100" cy="100" r="90" fill="none" stroke="currentColor" strokeWidth="2" />
           <circle cx="100" cy="100" r="15" fill="none" stroke="currentColor" strokeWidth="2" />
           {[...Array(24)].map((_, i) => (
@@ -98,7 +115,12 @@ const Landing = ({ onLaunch }) => {
         </svg>
 
         <div className="hero-container">
-          <div className="hero-content-left">
+          <motion.div 
+            className="hero-content-left"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+          >
             <div className="hero-badge">
               <div className="blink-dot"></div>
               🇮🇳 India's #1 Civic Guide
@@ -116,16 +138,21 @@ const Landing = ({ onLaunch }) => {
               <div className="stat-item">7 Languages Supported</div>
               <div className="stat-item">100% Free</div>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="hero-mockup">
+          <motion.div 
+            className="hero-mockup"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
             <div className="chat-card">
               <div className="chat-bubble chat-user">"How do I register to vote?"</div>
               <div className="chat-bubble chat-ai">
                 "Great question! To register, you need to fill Form 6 on the NVSP portal. You must be 18+ and an Indian citizen. Want me to walk you through each step? 🗳️"
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -161,17 +188,17 @@ const Landing = ({ onLaunch }) => {
           <h2 className="section-title">Learn in 3 Simple Steps</h2>
           <div className="steps-grid">
             <div className="step-card">
-              <span className="step-icon">💬</span>
+              <span className="step-icon" role="img" aria-label="speech bubble">💬</span>
               <h3>Ask Anything</h3>
               <p>Type your question in plain language — Hindi or English, whatever feels natural.</p>
             </div>
             <div className="step-card">
-              <span className="step-icon">🧠</span>
+              <span className="step-icon" role="img" aria-label="brain">🧠</span>
               <h3>Get Clear Answers</h3>
               <p>Naagrik AI breaks down complex electoral processes into simple, conversational explanations.</p>
             </div>
             <div className="step-card">
-              <span className="step-icon">📚</span>
+              <span className="step-icon" role="img" aria-label="books">📚</span>
               <h3>Go Deeper</h3>
               <p>Explore timelines, flowcharts, key roles, and related topics to build complete understanding.</p>
             </div>
@@ -195,7 +222,7 @@ const Landing = ({ onLaunch }) => {
               { e: '✅', t: 'Your Voter Rights', d: 'What you\'re entitled to on election day' }
             ].map((topic, idx) => (
               <div key={idx} className="topic-card">
-                <div className="topic-emoji">{topic.e}</div>
+                <div className="topic-emoji" role="img" aria-label="topic icon">{topic.e}</div>
                 <h4>{topic.t}</h4>
                 <p>{topic.d}</p>
               </div>
@@ -237,7 +264,7 @@ const Landing = ({ onLaunch }) => {
               { icon: '📲', title: 'Download Digital Voter ID (e-EPIC)', subtitle: 'Get your Voter ID card as a PDF on your phone', tag: 'Beginner', tagColor: '#006B3C', file: 'FAQ_04_Download_eEPIC_Digital_VoterID.pdf' }
             ].map((card, idx) => (
               <a key={idx} href={`./election pdf/${card.file}`} target="_blank" rel="noopener noreferrer" className="pdf-card resource-preview-card">
-                <div className="pdf-card-icon" aria-hidden="true">{card.icon}</div>
+                <div className="pdf-card-icon" aria-hidden="true"><span role="img" aria-label="emoji">{card.icon}</span></div>
                 <span className="pdf-card-tag" style={{ background: `${card.tagColor}18`, color: card.tagColor }}>{card.tag}</span>
                 <h3 className="pdf-card-title">{card.title}</h3>
                 <p className="pdf-card-subtitle">{card.subtitle}</p>
@@ -259,6 +286,31 @@ const Landing = ({ onLaunch }) => {
           <button onClick={onLaunch} className="btn-white" style={{ marginTop: '40px', cursor: 'pointer' }}>Launch Naagrik AI →</button>
         </div>
       </section>
+
+      {/* Feedback Widget */}
+      <div className={`feedback-widget ${showFeedback ? 'active' : ''}`}>
+        {!feedbackSent ? (
+          <div className="feedback-content">
+            <p>Was this helpful?</p>
+            <div className="feedback-buttons">
+              <button onClick={() => handleFeedback('yes')} className="fb-btn yes">👍 Yes</button>
+              <button onClick={() => handleFeedback('no')} className="fb-btn no">👎 No</button>
+            </div>
+          </div>
+        ) : (
+          <div className="feedback-success">
+            <p>Thanks for your feedback! ❤️</p>
+          </div>
+        )}
+      </div>
+
+      <button 
+        className="feedback-toggle"
+        onClick={() => setShowFeedback(!showFeedback)}
+        aria-label="Give feedback"
+      >
+        {showFeedback ? '✕' : <span role="img" aria-label="chat bubble">💬</span>}
+      </button>
 
       {/* 8. Footer */}
       <footer className="footer">
