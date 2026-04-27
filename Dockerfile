@@ -16,12 +16,15 @@ RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copy backend files
+# Copy backend and supporting files
 COPY server.js ./
-COPY data/ ./data/
+COPY config/ ./config/
+COPY constants/ ./constants/
 COPY services/ ./services/
 COPY middleware/ ./middleware/
 COPY routes/ ./routes/
+COPY utils/ ./utils/
+COPY assets/ ./assets/
 
 # Copy built frontend from build stage
 COPY --from=build /app/dist ./dist
